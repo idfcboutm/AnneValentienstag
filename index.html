@@ -1,0 +1,529 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Valentinstag Puzzle</title>
+  <style>
+    :root{
+      --board: min(92vmin, 520px);
+      --gap: 6px;
+      --radius: 16px;
+
+      --bg0: #140013;
+      --bg1: rgba(255, 64, 180, .22);
+      --bg2: rgba(255, 150, 210, .14);
+
+      --card: rgba(255,255,255,.08);
+      --border: rgba(255, 170, 220, .30);
+      --shadow: 0 18px 55px rgba(0,0,0,.45);
+
+      --text: rgba(255,255,255,.92);
+      --muted: rgba(255,255,255,.78);
+
+      --pink: #ff4db8;
+      --hot:  #ff2aa6;
+    }
+
+    *{ box-sizing:border-box; }
+    body{
+      margin:0;
+      min-height:100vh;
+      display:grid;
+      place-items:center;
+      background:
+        radial-gradient(1200px 700px at 20% 0%, var(--bg1), transparent 60%),
+        radial-gradient(900px 600px at 90% 20%, var(--bg2), transparent 55%),
+        radial-gradient(900px 800px at 50% 100%, rgba(255, 80, 160, .10), transparent 55%),
+        var(--bg0);
+      color:var(--text);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      overflow:hidden;
+    }
+
+    /* PUZZLE */
+    .board{
+      width:var(--board);
+      height:var(--board);
+      display:grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: repeat(3, 1fr);
+      gap:var(--gap);
+      padding:var(--gap);
+      background: linear-gradient(160deg, rgba(255,77,184,.18), rgba(255,255,255,.06));
+      border: 1px solid var(--border);
+      border-radius: calc(var(--radius) + 10px);
+      box-shadow: var(--shadow);
+      user-select:none;
+      touch-action:manipulation;
+      position:relative;
+    }
+
+    .tile{
+      border-radius: var(--radius);
+      border: 1px solid rgba(255, 170, 220, .26);
+      box-shadow: 0 10px 22px rgba(0,0,0,.28);
+      background-repeat:no-repeat;
+      cursor:pointer;
+      transition: transform .08s ease, filter .15s ease;
+      filter: saturate(1.03) contrast(1.02);
+    }
+    .tile:hover{ filter: saturate(1.10) contrast(1.04); }
+    .tile:active{ transform: scale(.99); }
+
+    .empty{
+      background: transparent !important;
+      border: 1px dashed rgba(255, 170, 220, .35);
+      box-shadow:none;
+      cursor:default;
+      filter:none;
+    }
+
+    /* FX canvas */
+    #fx{
+      position:fixed;
+      inset:0;
+      pointer-events:none;
+    }
+
+    /* OVERLAY */
+    .overlay{
+      position:fixed;
+      inset:0;
+      display:grid;
+      place-items:center;
+      background: rgba(0,0,0,.35);
+      opacity:0;
+      pointer-events:none;
+      transition: opacity .25s ease;
+      backdrop-filter: blur(10px);
+      padding: 18px;
+    }
+    .overlay.show{
+      opacity:1;
+      pointer-events:auto;
+    }
+
+    .modal{
+      width:min(720px, 96vw);
+      border-radius: 22px;
+      padding: 16px;
+      background: linear-gradient(160deg, rgba(255,77,184,.22), rgba(0,0,0,.42));
+      border: 1px solid rgba(255, 170, 220, .35);
+      box-shadow: 0 22px 70px rgba(0,0,0,.55);
+      position: relative;
+    }
+
+    /* obvious "NO selected" effect */
+    .modal.shake{
+      animation: shake .28s ease-in-out 1;
+    }
+    @keyframes shake{
+      0%{ transform: translateX(0); }
+      20%{ transform: translateX(-8px); }
+      40%{ transform: translateX(8px); }
+      60%{ transform: translateX(-6px); }
+      80%{ transform: translateX(6px); }
+      100%{ transform: translateX(0); }
+    }
+
+    .title{
+      margin: 2px 0 6px 0;
+      font-size: 18px;
+      font-weight: 850;
+      letter-spacing:.2px;
+      text-align:center;
+    }
+    .subtitle{
+      margin: 0 0 12px 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height:1.35;
+      text-align:center;
+    }
+
+    .btnRow{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    button{
+      border: 1px solid rgba(255, 170, 220, .35);
+      background: rgba(255,255,255,.10);
+      color: var(--text);
+      border-radius: 14px;
+      padding: 12px 14px;
+      cursor:pointer;
+      font: inherit;
+      font-weight: 800;
+      transition: transform .08s ease, background .15s ease, border-color .15s ease, box-shadow .15s ease, opacity .15s ease, filter .15s ease;
+      box-shadow: 0 10px 22px rgba(0,0,0,.20);
+      position: relative;
+      overflow: hidden;
+    }
+    button:hover{
+      background: rgba(255,77,184,.16);
+      border-color: rgba(255, 170, 220, .55);
+    }
+    button:active{ transform: translateY(1px); }
+
+    button.primary{
+      background: rgba(255, 77, 184, .22);
+      border-color: rgba(255, 77, 184, .55);
+    }
+    button.primary:hover{ background: rgba(255, 77, 184, .30); }
+
+    /* Visually "selected" NO */
+    .selectedNo{
+      background: rgba(255, 42, 166, .42) !important;
+      border-color: rgba(255, 42, 166, .90) !important;
+      box-shadow:
+        0 0 0 3px rgba(255, 42, 166, .35),
+        0 0 40px rgba(255, 42, 166, .35),
+        0 16px 34px rgba(0,0,0,.25) !important;
+      transform: translateY(-1px);
+    }
+    .selectedNo::after{
+      content: "AUSGEWÄHLT ✓";
+      position: absolute;
+      right: 10px;
+      top: 10px;
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: .4px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: rgba(0,0,0,.35);
+      border: 1px solid rgba(255,255,255,.22);
+      backdrop-filter: blur(8px);
+    }
+
+    .dim{
+      opacity: .45 !important;
+      filter: grayscale(.2) saturate(.7);
+      pointer-events: none;
+    }
+
+    /* FUN image: show full height (contain) */
+    .imgContain{
+      width: min(560px, 92vw);
+      height: min(62vh, 520px);
+      border-radius: 16px;
+      border: 1px solid rgba(255, 170, 220, .35);
+      box-shadow: 0 14px 40px rgba(0,0,0,.35);
+      background: center / contain no-repeat;
+      background-color: rgba(0,0,0,.22);
+      margin: 8px auto 0 auto;
+    }
+
+    .pickGrid{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-top: 12px;
+    }
+
+    .pick{
+      border-radius: 18px;
+      border: 1px solid rgba(255, 170, 220, .42);
+      background: rgba(255,255,255,.07);
+      padding: 12px;
+      cursor:pointer;
+      box-shadow: 0 14px 34px rgba(0,0,0,.28);
+      transition: transform .08s ease, background .15s ease, border-color .15s ease;
+      display:grid;
+      gap: 10px;
+      justify-items:center;
+    }
+    .pick:hover{
+      background: rgba(255,77,184,.16);
+      border-color: rgba(255, 170, 220, .70);
+    }
+    .pick:active{ transform: translateY(1px); }
+
+    .pickImg{
+      width: 100%;
+      aspect-ratio: 1/1;
+      border-radius: 16px;
+      background: center / cover no-repeat;
+      border: 1px solid rgba(255, 170, 220, .28);
+    }
+    .pickLbl{
+      font-weight: 900;
+      font-size: 15px;
+      color: rgba(255,255,255,.92);
+    }
+  </style>
+</head>
+
+<body>
+  <div id="board" class="board" aria-label="Schiebepuzzle"></div>
+  <canvas id="fx"></canvas>
+
+  <div id="overlay" class="overlay" role="dialog" aria-modal="true">
+    <div id="modal" class="modal"></div>
+  </div>
+
+  <script>
+    const IMAGE_URL = "assets/puzzle.jpeg";
+    const FUN_URL   = "assets/spaß.jpeg";
+    const ME_URL    = "assets/ich.jpeg";
+
+    const N = 3;
+    const EMPTY = 0;
+
+    const boardEl = document.getElementById("board");
+    const overlayEl = document.getElementById("overlay");
+    const modalEl = document.getElementById("modal");
+    const fx = document.getElementById("fx");
+    const ctx = fx.getContext("2d");
+
+    const solved = Array.from({ length: N*N }, (_, i) => (i === N*N - 1 ? EMPTY : i + 1));
+
+    function makeThreeMovesAway() {
+      let arr = solved.slice();
+      let emptyIdx = arr.indexOf(EMPTY);
+      let prevEmpty = -1;
+
+      function idxToRC(i){ return { r: Math.floor(i / N), c: i % N }; }
+      function rcToIdx(r,c){ return r*N + c; }
+      function neighbors(idx){
+        const { r,c } = idxToRC(idx);
+        const res = [];
+        if (r > 0) res.push(rcToIdx(r-1,c));
+        if (r < N-1) res.push(rcToIdx(r+1,c));
+        if (c > 0) res.push(rcToIdx(r,c-1));
+        if (c < N-1) res.push(rcToIdx(r,c+1));
+        return res;
+      }
+
+      for (let step = 0; step < 3; step++) {
+        const nbs = neighbors(emptyIdx).filter(n => n !== prevEmpty);
+        const pick = nbs[Math.floor(Math.random() * nbs.length)];
+        [arr[pick], arr[emptyIdx]] = [arr[emptyIdx], arr[pick]];
+        prevEmpty = emptyIdx;
+        emptyIdx = pick;
+      }
+      return arr;
+    }
+
+    let tiles = makeThreeMovesAway();
+    let locked = false;
+
+    function idxToRC(i){ return { r: Math.floor(i / N), c: i % N }; }
+    function rcToIdx(r,c){ return r*N + c; }
+    function neighbors(idx){
+      const { r,c } = idxToRC(idx);
+      const res = [];
+      if (r > 0) res.push(rcToIdx(r-1,c));
+      if (r < N-1) res.push(rcToIdx(r+1,c));
+      if (c > 0) res.push(rcToIdx(r,c-1));
+      if (c < N-1) res.push(rcToIdx(r,c+1));
+      return res;
+    }
+
+    function isSolved(){
+      for (let i=0;i<tiles.length;i++){
+        if (tiles[i] !== solved[i]) return false;
+      }
+      return true;
+    }
+
+    function render(){
+      boardEl.innerHTML = "";
+      const bgSize = `${N * 100}% ${N * 100}%`;
+
+      tiles.forEach((val, i) => {
+        const cell = document.createElement("div");
+        cell.className = "tile";
+        cell.dataset.idx = String(i);
+
+        if (val === EMPTY){
+          cell.classList.add("empty");
+        } else {
+          const { r,c } = idxToRC(val - 1);
+          const x = (c / (N - 1)) * 100;
+          const y = (r / (N - 1)) * 100;
+          cell.style.backgroundImage = `url("${IMAGE_URL}")`;
+          cell.style.backgroundSize = bgSize;
+          cell.style.backgroundPosition = `${x}% ${y}%`;
+        }
+
+        cell.addEventListener("click", onTileClick);
+        boardEl.appendChild(cell);
+      });
+    }
+
+    function onTileClick(e){
+      if (locked) return;
+
+      const idx = parseInt(e.currentTarget.dataset.idx, 10);
+      const emptyIdx = tiles.indexOf(EMPTY);
+      if (idx === emptyIdx) return;
+      if (!neighbors(idx).includes(emptyIdx)) return;
+
+      [tiles[idx], tiles[emptyIdx]] = [tiles[emptyIdx], tiles[idx]];
+      render();
+
+      if (isSolved()){
+        locked = true;
+        celebrateAndStartFlow();
+      }
+    }
+
+    // ---- fireworks ----
+    function resizeFx(){
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      fx.width  = Math.floor(window.innerWidth * dpr);
+      fx.height = Math.floor(window.innerHeight * dpr);
+      fx.style.width  = window.innerWidth + "px";
+      fx.style.height = window.innerHeight + "px";
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    let particles = [];
+    function spawnBurst(cx, cy, count = 150){
+      for (let i=0;i<count;i++){
+        const a = Math.random() * Math.PI * 2;
+        const sp = 2 + Math.random() * 5.5;
+        particles.push({
+          x: cx, y: cy,
+          vx: Math.cos(a) * sp,
+          vy: Math.sin(a) * sp - (1 + Math.random() * 2.2),
+          g: 0.08 + Math.random() * 0.06,
+          life: 90 + Math.floor(Math.random() * 40),
+          size: 2 + Math.random() * 3.3,
+          hue: (300 + Math.random() * 80) % 360
+        });
+      }
+    }
+    function stepFx(){
+      ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+      particles = particles.filter(p => p.life > 0);
+
+      for (const p of particles){
+        p.life--;
+        p.vy += p.g;
+        p.x += p.vx;
+        p.y += p.vy;
+        const alpha = Math.max(0, p.life / 130);
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = `hsl(${p.hue} 95% 65%)`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+
+      if (particles.length > 0) requestAnimationFrame(stepFx);
+    }
+    function fireworks(){
+      const cx = window.innerWidth / 2;
+      const cy = window.innerHeight / 2;
+      spawnBurst(cx, cy - 20, 160);
+      spawnBurst(cx - 220, cy + 60, 110);
+      spawnBurst(cx + 220, cy + 60, 110);
+      stepFx();
+    }
+
+    // ---- overlay flow ----
+    function openOverlay(){ overlayEl.classList.add("show"); }
+    function setModal(html){ modalEl.innerHTML = html; }
+
+    function celebrateAndStartFlow(){
+      fireworks();
+      setTimeout(() => { openOverlay(); showQ1(); }, 650);
+    }
+
+    // Make it VERY obvious that "Nein" got selected, regardless of click
+    function showQ1(){
+      setModal(`
+        <div class="title">🎉 Geschafft!</div>
+        <div class="subtitle">Willst du mein Valentinstag date sein?</div>
+        <div class="btnRow">
+          <button class="primary" id="yesBtn">Ja</button>
+          <button id="noBtn">Nein</button>
+        </div>
+      `);
+
+      const yesBtn = document.getElementById("yesBtn");
+      const noBtn  = document.getElementById("noBtn");
+
+      function forceNoSelected(){
+        // very obvious: NO becomes selected + YES dims, modal shakes
+        noBtn.classList.add("selectedNo");
+        yesBtn.classList.add("dim");
+        modalEl.classList.remove("shake");
+        void modalEl.offsetWidth; // restart animation
+        modalEl.classList.add("shake");
+
+        // short delay for the "whoa Nein selected" moment, then show prank screen
+        setTimeout(() => {
+          showPrankAndRepeatQuestion();
+        }, 650);
+      }
+
+      yesBtn.addEventListener("click", forceNoSelected);
+      noBtn.addEventListener("click", forceNoSelected);
+    }
+
+    // Image on top, question below. Stays until user clicks Ja/Ja.
+    function showPrankAndRepeatQuestion(){
+      setModal(`
+        <div class="title">EYYYYY. Falsche Antwort 😠</div>
+        <div class="imgContain" style="background-image:url('${FUN_URL}')"></div>
+
+        <div style="margin-top:14px;">
+          <div class="subtitle" style="margin-bottom:10px;">Jetzt aber nochmal richtig: Willst du mein Valentinstag date sein?</div>
+          <div class="btnRow">
+            <button class="primary" id="yesA">Ja</button>
+            <button class="primary" id="yesB">Auch Ja :P</button>
+          </div>
+        </div>
+      `);
+
+      const go = () => showQ2();
+      document.getElementById("yesA").addEventListener("click", go);
+      document.getElementById("yesB").addEventListener("click", go);
+    }
+
+    function showQ2(){
+      setModal(`
+        <div class="title">💞</div>
+        <div class="subtitle">Mit wem willst du Valentinstag verbringen?</div>
+        <div class="pickGrid">
+          <div class="pick" id="pick1" role="button" tabindex="0" aria-label="Auswahl 1">
+            <div class="pickImg" style="background-image:url('${ME_URL}')"></div>
+            <div class="pickLbl">Option A</div>
+          </div>
+          <div class="pick" id="pick2" role="button" tabindex="0" aria-label="Auswahl 2">
+            <div class="pickImg" style="background-image:url('${ME_URL}')"></div>
+            <div class="pickLbl">Option B</div>
+          </div>
+        </div>
+      `);
+
+      const done = () => showDone();
+      const p1 = document.getElementById("pick1");
+      const p2 = document.getElementById("pick2");
+
+      p1.addEventListener("click", done);
+      p2.addEventListener("click", done);
+      p1.addEventListener("keydown", (e)=>{ if(e.key==="Enter"||e.key===" ") done(); });
+      p2.addEventListener("keydown", (e)=>{ if(e.key==="Enter"||e.key===" ") done(); });
+    }
+
+    function showDone(){
+      setModal(`<div class="title">💞 Richtige Entscheidung! <3</div>`);
+    }
+
+    window.addEventListener("resize", resizeFx);
+
+    // init
+    resizeFx();
+    render();
+  </script>
+</body>
+</html>
